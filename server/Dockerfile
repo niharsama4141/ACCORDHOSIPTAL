@@ -1,19 +1,25 @@
+# Use official Python image
 FROM python:3.12-slim
 
-# Set working directory to the Django backend
-WORKDIR /app/server
+# Prevents Python from writing .pyc files and buffering output
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
-# Copy the whole project
+# Set working directory
+WORKDIR /app
+
+# Copy everything
 COPY . /app
 
-# Install dependencies
-RUN pip install --no-cache-dir -r /app/requirements.txt
+# Install dependencies (this time from server/requirements.txt)
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r server/requirements.txt
 
-# Collect static files (optional)
-RUN python manage.py collectstatic --noinput || true
+# Move into Django project folder
+WORKDIR /app/server
 
-# Expose port 8000
+# Expose web port
 EXPOSE 8000
 
-# Start the ASGI server (Haztrak uses ASGI now)
-CMD ["gunicorn", "core.asgi:application", "--bind", "0.0.0.0:8000", "-k", "uvicorn.workers.UvicornWorker"]
+# Start Django using Gunicorn (production-safe)
+CMD ["gunicorn", "haztrak.wsgi:application", "--bind", "0.0.0.0:8000"]
