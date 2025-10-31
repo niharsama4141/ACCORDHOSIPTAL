@@ -1,36 +1,19 @@
-# Builder
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
-LABEL maintainer="graham.david@epa.gov"
-ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+FROM python:3.12-slim
 
-#RUN apt install libffi-dev gcc libc-dev curl
-RUN apt-get update && \
-    apt-get install -y libffi-dev gcc libc-dev curl && \
-    rm -rf /var/lib/apt/lists/*
+# Set working directory to the Django backend
+WORKDIR /app/server
 
-WORKDIR /app
+# Copy the whole project
+COPY . /app
 
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --no-install-project --no-dev
+# Install dependencies
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
-ADD . /app
+# Collect static files (optional)
+RUN python manage.py collectstatic --noinput || true
 
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
-
-# App
-FROM python:3.12-slim-bookworm
-
-COPY --from=builder --chown=app:app /app /app
-
-ENV PATH="/app/.venv/bin:$PATH"
-
-WORKDIR /app
-
+# Expose port 8000
 EXPOSE 8000
 
-CMD ["gunicorn", "--bind", "0.0.0:8000", "--workers", "2", "-k", "uvicorn_worker.UvicornWorker", "haztrak.asgi:app"]
+# Start the ASGI server (Haztrak uses ASGI now)
+CMD ["gunicorn", "core.asgi:application", "--bind", "0.0.0.0:8000", "-k", "uvicorn.workers.UvicornWorker"]
